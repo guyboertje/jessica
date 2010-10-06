@@ -76,7 +76,31 @@ describe RabbitMQClient do
       sleep 1
       a.should == 3
     end
-    
+
+    it "should able to subscribe with a 2-arity callback function" do
+      a = []
+      @queue.bind(@exchange)
+      @queue.subscribe do |v, p|
+         a << p.nil?
+      end
+      @queue.publish("1")
+      @queue.publish("2")
+      sleep 1
+      a.should == [false,false]
+    end
+
+    it "should able to subscribe with a 3-arity callback function" do
+      a = []
+      @queue.bind(@exchange)
+      @queue.subscribe do |v, p, e|
+         a << e.nil?
+      end
+      @queue.publish("1")
+      @queue.publish("2")
+      sleep 1
+      a.should == [false,false]
+    end
+
     it "should be able to subscribe to a queue using loop_subscribe" do
       a = 0
       @queue.bind(@exchange)
@@ -95,12 +119,52 @@ describe RabbitMQClient do
       sleep 2
       a.should == 3
     end
-    
+
+    it "should be able to subscribe to a queue using loop_subscribe with a 2-arity callback" do
+      a = []
+      @queue.bind(@exchange)
+      Thread.new do
+        begin
+          timeout(1) do
+            @queue.loop_subscribe do |v, p|
+              a << p.nil?
+            end
+          end
+        rescue Timeout::Error => e
+        end
+      end
+      @queue.publish("1")
+      @queue.publish("2")
+      sleep 2
+      a.should == [false,false]
+    end
+
+    it "should be able to subscribe to a queue using loop_subscribe with a 3-arity callback" do
+      a = []
+      @queue.bind(@exchange)
+      Thread.new do
+        begin
+          timeout(1) do
+            @queue.loop_subscribe do |v, p, e|
+              a << e.nil?
+            end
+          end
+        rescue Timeout::Error => e
+        end
+      end
+      @queue.publish("1")
+      @queue.publish("2")
+      sleep 2
+      a.should == [false,false]
+    end
+
     it "should raise an exception if binding a persistent queue with non-persistent exchange and vice versa" do
       persistent_queue = @client.queue('test_queue1', true)
       persistent_exchange = @client.exchange('test_exchange1', 'fanout', true)
       lambda { persistent_queue.bind(@exchange) }.should raise_error(RabbitMQClient::RabbitMQClientError)
       lambda { @queue.bind(persistent_exchange) }.should raise_error(RabbitMQClient::RabbitMQClientError)
+      persistent_queue.delete
+      persistent_exchange.delete
     end
     
     it "should raise an exception if publish a persistent message on non-duration queue" do

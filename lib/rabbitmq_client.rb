@@ -29,7 +29,14 @@ class RabbitMQClient
       delivery_tag = envelope.get_delivery_tag
       message_body = Marshal.load(String.from_java_bytes(body))
       # TODO: Do we need to do something with properties?
-      @block.call message_body
+      case @block.arity
+      when 1
+        @block.call message_body
+      when 2
+        @block.call message_body, properties
+      when 3
+        @block.call message_body, properties, envelope
+      end
       @channel.basic_ack(delivery_tag, false)
     end
   end
@@ -104,7 +111,17 @@ class RabbitMQClient
         begin
           delivery = consumer.next_delivery
           message_body = Marshal.load(String.from_java_bytes(delivery.get_body))
-          block.call message_body
+          case block.arity
+          when 1
+            block.call message_body
+          when 2
+            properties = delivery.get_properties
+            block.call message_body, properties
+          when 3
+            properties = delivery.get_properties
+            envelope = delivery.get_envelope
+            block.call message_body, properties, envelope
+          end
           @channel.basic_ack(delivery.get_envelope.get_delivery_tag, false)
         rescue InterruptedException => ie
           next
