@@ -7,7 +7,6 @@ require File.dirname(__FILE__) + '/rabbitmq-client.jar'
 class RabbitMQClient
   include ObjectSpace
   include_class('com.rabbitmq.client.Connection')
-  include_class('com.rabbitmq.client.ConnectionParameters')
   include_class('com.rabbitmq.client.ConnectionFactory')
   include_class('com.rabbitmq.client.Channel')
   include_class('com.rabbitmq.client.Consumer')
@@ -40,7 +39,10 @@ class RabbitMQClient
       @name = name
       @durable = durable
       @channel = channel
-      @channel.queue_declare(name, durable)
+      exclusive = false
+      auto_delete = false
+      args = nil
+      @channel.queue_declare(name, durable, exclusive, auto_delete, args)
       self
     end
     
@@ -136,9 +138,14 @@ class RabbitMQClient
       @type = type
       @durable = durable
       @channel = channel
+      auto_delete = false
       # Declare a non-passive, auto-delete exchange
-      @channel.exchange_declare(@name, type.to_s, false, durable, true, nil)
+      @channel.exchange_declare(@name, type.to_s, durable, auto_delete, nil)
       self
+    end
+    
+    def delete
+      @channel.exchange_delete(@name)
     end
   end
   
@@ -171,13 +178,14 @@ class RabbitMQClient
   end
   
   def connect
-    params = ConnectionParameters.new
-    params.set_username(@username)
-    params.set_password(@password)
-    params.set_virtual_host(@vhost)
-    params.set_requested_heartbeat(0)
-    conn_factory = ConnectionFactory.new(params)
-    @connection = conn_factory.new_connection(@host, @port)
+    conn_factory = ConnectionFactory.new
+    conn_factory.set_username(@username)
+    conn_factory.set_password(@password)
+    conn_factory.set_virtual_host(@vhost)
+    conn_factory.set_requested_heartbeat(0)
+    conn_factory.set_host(@host)
+    conn_factory.set_port(@port)
+    @connection = conn_factory.new_connection
     @channel = @connection.create_channel
   end
   
