@@ -1,5 +1,4 @@
 require 'java'
-require File.dirname(__FILE__) + '/junit.jar'
 require File.dirname(__FILE__) + '/commons-cli-1.1.jar'
 require File.dirname(__FILE__) + '/commons-io-1.2.jar'
 require File.dirname(__FILE__) + '/rabbitmq-client.jar'
