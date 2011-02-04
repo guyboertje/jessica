@@ -3,6 +3,29 @@ require 'spec'
 require File.dirname(__FILE__) + '/../lib/rabbitmq_client'
 
 describe RabbitMQClient do
+  class BrokenMarshaller
+    def self.dump(message)
+      message.to_java_bytes
+    end
+  end
+  
+  it "should raise an exception for a broken marshaller" do
+    lambda { @client = RabbitMQClient.new({:no_auto_correct=>true, :marshaller=>BrokenMarshaller}) }.should raise_error(RabbitMQClient::RabbitMQClientError)
+  end
+  
+  it "should allow no marshaller" do
+    lambda { @client = RabbitMQClient.new({:no_auto_correct=>true, :marshaller=>false}) }.should_not raise_error(RabbitMQClient::RabbitMQClientError)
+  end
+  
+  it "should raise an exception creating a queue with a broken marshaller" do
+    @client = RabbitMQClient.new({:marshaller=>false})
+    lambda { @client.queue('test_queue', false, BrokenMarshaller) }.should raise_error(RabbitMQClient::RabbitMQClientError)
+    @client.disconnect if @client
+  end
+end
+
+
+describe RabbitMQClient do
   before(:each) do
     @client = RabbitMQClient.new
   end
@@ -39,6 +62,10 @@ describe RabbitMQClient do
     before(:each) do
       @queue = @client.queue('test_queue')
       @exchange = @client.exchange('test_exchange', 'direct')
+    end
+    
+    after(:each) do
+      @queue.purge
     end
     
     it "should be able to create a queue" do
@@ -116,7 +143,7 @@ describe RabbitMQClient do
       end
       @queue.publish("1")
       @queue.publish("2")
-      sleep 2
+      sleep 1
       a.should == 3
     end
 
@@ -135,7 +162,7 @@ describe RabbitMQClient do
       end
       @queue.publish("1")
       @queue.publish("2")
-      sleep 2
+      sleep 1
       a.should == [false,false]
     end
 
@@ -154,11 +181,11 @@ describe RabbitMQClient do
       end
       @queue.publish("1")
       @queue.publish("2")
-      sleep 2
+      sleep 1
       a.should == [false,false]
     end
 
-    it "should raise an exception if binding a persistent queue with non-persistent exchange and vice versa" do
+    it "should raise an exception if binding a persistent queue with a non-persistent exchange and vice versa" do
       persistent_queue = @client.queue('test_queue1', true)
       persistent_exchange = @client.exchange('test_exchange1', 'fanout', true)
       lambda { persistent_queue.bind(@exchange) }.should raise_error(RabbitMQClient::RabbitMQClientError)
@@ -167,7 +194,7 @@ describe RabbitMQClient do
       persistent_exchange.delete
     end
     
-    it "should raise an exception if publish a persistent message on non-duration queue" do
+    it "should raise an exception if publish a persistent message on non-durable queue" do
       @queue.bind(@exchange)
       lambda { @queue.persistent_publish('Hello') }.should raise_error(RabbitMQClient::RabbitMQClientError)
     end
@@ -177,6 +204,10 @@ describe RabbitMQClient do
     before(:each) do
       @queue = @client.queue('test_durable_queue', true)
       @exchange = @client.exchange('test_durable_exchange', 'fanout', true)
+    end
+    
+    after(:each) do
+      @queue.purge
     end
     
     it "should be able to create a queue" do
@@ -205,4 +236,135 @@ describe RabbitMQClient do
       a.should == 3
     end
   end
+
+
+  describe Queue, "Basic, non-marshalled queue" do
+    before(:each) do
+      @queue = @client.queue('test_queue', false, nil)
+      @exchange = @client.exchange('test_exchange', 'direct')
+    end
+
+    after(:each) do
+      @queue.purge
+    end
+    
+    it "should be able to publish and retrieve a message" do
+      @queue.bind(@exchange)
+      @queue.publish(Marshal.dump('Hello World').to_java_bytes)
+      Marshal.load(String.from_java_bytes(@queue.retrieve)).should == 'Hello World'
+      @queue.publish(Marshal.dump('人大').to_java_bytes)
+      Marshal.load(String.from_java_bytes(@queue.retrieve)).should == '人大'
+    end
+
+    it "should be able to purge the queue" do
+      @queue.publish(Marshal.dump('Hello World').to_java_bytes)
+      @queue.publish(Marshal.dump('Hello World').to_java_bytes)
+      @queue.publish(Marshal.dump('Hello World').to_java_bytes)
+      @queue.purge
+      @queue.retrieve.should == nil
+    end
+
+    it "should able to subscribe with a callback function" do
+      a = 0
+      @queue.bind(@exchange)
+      @queue.subscribe do |v|
+         a += Marshal.load(String.from_java_bytes(v)).to_i
+      end
+      @queue.publish(Marshal.dump('1').to_java_bytes)
+      @queue.publish(Marshal.dump('2').to_java_bytes)
+      sleep 1
+      a.should == 3
+    end
+
+    it "should be able to subscribe to a queue using loop_subscribe" do
+      a = 0
+      @queue.bind(@exchange)
+      Thread.new do
+        begin
+          timeout(1) do
+            @queue.loop_subscribe do |v|
+              a += Marshal.load(String.from_java_bytes(v)).to_i
+            end
+          end
+        rescue Timeout::Error => e
+        end
+      end
+      @queue.publish(Marshal.dump('1').to_java_bytes)
+      @queue.publish(Marshal.dump('2').to_java_bytes)
+      sleep 1
+      a.should == 3
+    end
+
+    it "should raise an exception if trying to publish an object that is not marshalled to java bytes" do
+      @queue.bind(@exchange)
+      lambda { @queue.publish(12345) }.should raise_error(RabbitMQClient::RabbitMQClientError)
+    end
+  end
+
+  describe Queue, "Basic, client-defined marshalling queue" do
+    class MyMarshaller
+      def self.load(body)
+        String.from_java_bytes(body)
+      end
+      def self.dump(message)
+        message.to_java_bytes
+      end
+    end
+    before(:each) do
+      @queue = @client.queue('test_queue', false, MyMarshaller)
+      @exchange = @client.exchange('test_exchange', 'direct')
+    end
+
+    after(:each) do
+      @queue.purge
+    end
+    
+    it "should be able to publish and retrieve a message" do
+      @queue.bind(@exchange)
+      @queue.publish('Hello World')
+      @queue.retrieve.should == 'Hello World'
+      @queue.publish('人大')
+      @queue.retrieve.should == '人大'
+    end
+
+    it "should be able to purge the queue" do
+      @queue.publish('Hello World')
+      @queue.publish('Hello World')
+      @queue.publish('Hello World')
+      @queue.purge
+      @queue.retrieve.should == nil
+    end
+
+    it "should able to subscribe with a callback function" do
+      a = 0
+      @queue.bind(@exchange)
+      @queue.subscribe do |v|
+         a += v.to_i
+      end
+      @queue.publish('1')
+      @queue.publish('2')
+      sleep 1
+      a.should == 3
+    end
+
+    it "should be able to subscribe to a queue using loop_subscribe" do
+      a = 0
+      @queue.bind(@exchange)
+      Thread.new do
+        begin
+          timeout(1) do
+            @queue.loop_subscribe do |v|
+              a += v.to_i
+            end
+          end
+        rescue Timeout::Error => e
+        end
+      end
+      @queue.publish("1")
+      @queue.publish("2")
+      sleep 1
+      a.should == 3
+    end
+  end
+
 end

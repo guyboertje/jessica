@@ -17,16 +17,26 @@ class RabbitMQClient
   
   class RabbitMQClientError < StandardError;end
   
+  class DefaultMarshaller
+    def self.load(body)
+      Marshal.load(String.from_java_bytes(body))
+    end
+    def self.dump(message_body)
+      Marshal.dump(message_body).to_java_bytes
+    end
+  end
+  
   class QueueConsumer < DefaultConsumer
-    def initialize(channel, block)
+    def initialize(channel, block, marshaller=DefaultMarshaller)
       @channel = channel
       @block = block
+      @marshaller = marshaller
       super(channel)
     end
     
     def handleDelivery(consumer_tag, envelope, properties, body)
       delivery_tag = envelope.get_delivery_tag
-      message_body = Marshal.load(String.from_java_bytes(body))
+      message_body = @marshaller.nil? ? body : @marshaller.send(:load, body)
       # TODO: Do we need to do something with properties?
       case @block.arity
       when 1
@@ -41,10 +51,12 @@ class RabbitMQClient
   end
   
   class Queue
-    def initialize(name, channel, durable=false)
+    def initialize(name, channel, durable=false, marshaller=false)
       @name = name
       @durable = durable
       @channel = channel
+      @marshaller = (marshaller == false) ? DefaultMarshaller : marshaller
+      raise RabbitMQClientError, "invalid marshaller" unless @marshaller.nil? or (@marshaller.respond_to? :load and @marshaller.respond_to? :dump)
       exclusive = false
       auto_delete = false
       args = nil
@@ -53,7 +65,7 @@ class RabbitMQClient
     end
     
     def bind(exchange, routing_key='')
-      raise RabbitMQClientError, "queue and exchange has different durable property" unless @durable == exchange.durable
+      raise RabbitMQClientError, "queue and exchange have different durable properties" unless @durable == exchange.durable
       @routing_key = routing_key
       @exchange = exchange
       @channel.queue_bind(@name, @exchange.name, @routing_key)
@@ -73,7 +85,10 @@ class RabbitMQClient
     # RabbitMQClient::MessageProperties::PERSISTENT_TEXT_PLAIN
     def publish(message_body, props=nil)
       auto_bind
-      message_body_byte = Marshal.dump(message_body).to_java_bytes
+      message_body_byte = @marshaller.nil? ? message_body : @marshaller.send(:dump, message_body)
+      unless message_body_byte.respond_to? :java_object and message_body_byte.java_object.class == Java::JavaArray
+        raise RabbitMQClientError, "message not converted to java bytes for publishing"
+      end
       @channel.basic_publish(@exchange.name, @routing_key, props, message_body_byte)
       message_body
     end
@@ -90,7 +105,7 @@ class RabbitMQClient
       response = @channel.basic_get(@name, no_ack)
       if response
         props = response.get_props
-        message_body = Marshal.load(String.from_java_bytes(response.get_body))
+        message_body = @marshaller.nil? ? response.get_body : @marshaller.send(:load, response.get_body)
         delivery_tag = response.get_envelope.get_delivery_tag
         @channel.basic_ack(delivery_tag, false)
       end
@@ -99,7 +114,7 @@ class RabbitMQClient
     
     def subscribe(&block)
       no_ack = false
-      @channel.basic_consume(@name, no_ack, QueueConsumer.new(@channel, block))
+      @channel.basic_consume(@name, no_ack, QueueConsumer.new(@channel, block, @marshaller))
     end
     
     def loop_subscribe(&block)
@@ -109,7 +124,7 @@ class RabbitMQClient
       loop do
         begin
           delivery = consumer.next_delivery
-          message_body = Marshal.load(String.from_java_bytes(delivery.get_body))
+          message_body = @marshaller.nil? ? delivery.get_body : @marshaller.send(:load, delivery.get_body)
           case block.arity
           when 1
             block.call message_body
@@ -183,6 +198,17 @@ class RabbitMQClient
     @password = options[:password] || 'guest'
     @vhost = options[:vhost] || '/'
     
+    #marshalling
+    case options[:marshaller]
+    when false
+      @marshaller = nil
+    when nil
+      @marshaller = DefaultMarshaller
+    else
+      @marshaller = options[:marshaller]
+    end
+    raise RabbitMQClientError, "invalid marshaller" unless (@marshaller.nil? or (@marshaller.respond_to? :load and @marshaller.respond_to? :dump))
+    
     # queues and exchanges
     @queues = {}
     @exchanges = {}
@@ -216,8 +242,9 @@ class RabbitMQClient
     @connection != nil
   end
   
-  def queue(name, durable=false)
-    @queues[name] ||= Queue.new(name, @channel, durable)
+  def queue(name, durable=false, marshaller=false)
+    marsh = (marshaller == false) ? @marshaller : marshaller
+    @queues[name] ||= Queue.new(name, @channel, durable, marsh)
   end
   
   def exchange(name, type='fanout', durable=false)

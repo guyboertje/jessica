@@ -49,3 +49,20 @@ Installing RabbitMQ on OS X
 
 To run RabbitMQ
 3. sudo rabbitmq-server
+
+Marshalling
+===========
+By default standard ruby marshalling is used to serialise data but this can be overridden by using a marshalling class
+which responds to two method calls:
+1) load takes an array of java bytes and returns whatever you desrialise from this
+2) dump takes a message and must produce an array of java bytes, a RabbitMQClientError is raised if the output is not 
+a suitable array
+
+The marshalling class can be set in several ways:
+1. By instantiating a RabbitMQClient with a option of :marshaller set to the class you wish use as your default marshaller
+2. By setting the 3rd argument of RabbitMQClient#queue to the class you wish to use for this queue
+3. By setting the 3rd argument of RabbitMQClient::QueueConsumer#queue to the class you wish to use
+
+
+
+
