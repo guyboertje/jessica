@@ -51,6 +51,8 @@ class RabbitMQClient
   end
   
   class Queue
+    attr_reader :marshaller
+    
     def initialize(name, channel, durable=false, marshaller=false)
       @name = name
       @durable = durable
@@ -62,6 +64,18 @@ class RabbitMQClient
       args = nil
       @channel.queue_declare(name, durable, exclusive, auto_delete, args)
       self
+    end
+    
+    def marshaller=(marshaller)
+      case marshaller
+      when false
+        @marshaller = nil
+      when nil
+        @marshaller = DefaultMarshaller
+      else
+        raise RabbitMQClientError, "invalid marshaller" unless (marshaller.nil? or (marshaller.respond_to? :load and marshaller.respond_to? :dump))
+        @marshaller = marshaller
+      end
     end
     
     def bind(exchange, routing_key='')
@@ -184,6 +198,7 @@ class RabbitMQClient
   class << self
   end
   
+  attr_reader :marshaller
   attr_reader :channel
   attr_reader :connection
   
@@ -217,6 +232,18 @@ class RabbitMQClient
     # Disconnect before the object is destroyed
     define_finalizer(self, lambda {|id| self.disconnect if self.connected? })
     self
+  end
+
+  def marshaller=(marshaller)
+    case marshaller
+    when false
+      @marshaller = nil
+    when nil
+      @marshaller = DefaultMarshaller
+    else
+      raise RabbitMQClientError, "invalid marshaller" unless (marshaller.nil? or (marshaller.respond_to? :load and marshaller.respond_to? :dump))
+      @marshaller = marshaller
+    end
   end
   
   def connect

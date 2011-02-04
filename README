@@ -61,8 +61,9 @@ a suitable array
 The marshalling class can be set in several ways:
 1. By instantiating a RabbitMQClient with a option of :marshaller set to the class you wish use as your default marshaller
 2. By setting the 3rd argument of RabbitMQClient#queue to the class you wish to use for this queue
-3. By setting the 3rd argument of RabbitMQClient::QueueConsumer#queue to the class you wish to use
-
+3. By instantiating a RabbitMQClient::QueueConsumer with a 3rd argument of the class you wish to use
+4. By using RabbitMQClient#marshaller=
+5. By using RabbitMQClient::Queue#marshaller=
 
 
 
