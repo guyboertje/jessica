@@ -97,13 +97,19 @@ class RabbitMQClient
     # RabbitMQClient::MessageProperties::PERSISTENT_BASIC
     # RabbitMQClient::MessageProperties::TEXT_PLAIN
     # RabbitMQClient::MessageProperties::PERSISTENT_TEXT_PLAIN
-    def publish(message_body, props=nil)
+    def publish(message_body, props=RabbitMQClient::MessageProperties::TEXT_PLAIN)
       auto_bind
       message_body_byte = @marshaller.nil? ? message_body : @marshaller.send(:dump, message_body)
       unless message_body_byte.respond_to? :java_object and message_body_byte.java_object.class == Java::JavaArray
         raise RabbitMQClientError, "message not converted to java bytes for publishing"
       end
-      @channel.basic_publish(@exchange.name, @routing_key, props, message_body_byte)
+      if props.kind_of? Hash
+        properties = Java::ComRabbitmqClient::AMQP::BasicProperties.new()
+        props.each {|k,v| properties.send(:"#{k.to_s}=", v) }
+      else
+        properties = props
+      end
+      @channel.basic_publish(@exchange.name, @routing_key, properties, message_body_byte)
       message_body
     end
     
@@ -112,10 +118,10 @@ class RabbitMQClient
       publish(message_body, props)
     end
     
-    def retrieve
+    def retrieve(opts={})
       auto_bind
       message_body = nil
-      no_ack = false
+      no_ack = opts[:no_ack] ? opts[:no_ack] : false
       response = @channel.basic_get(@name, no_ack)
       if response
         props = response.get_props
@@ -123,7 +129,15 @@ class RabbitMQClient
         delivery_tag = response.get_envelope.get_delivery_tag
         @channel.basic_ack(delivery_tag, false)
       end
-      message_body
+      unless opts.empty?
+        resp = {}
+        resp[:message_body] = message_body
+        resp[:properties] = props unless opts[:properties].nil?
+        resp[:envelope] = response.get_envelope unless opts[:envelope].nil?
+        resp
+      else
+        message_body
+      end
     end
     
     def subscribe(&block)
