@@ -213,6 +213,40 @@ describe RabbitMQClient do
       @queue.bind(@exchange)
       lambda { @queue.marshaller = MyMarshaller }.should_not raise_error(RabbitMQClient::RabbitMQClientError)
     end
+    
+    it "should be able to get the message envelope through retrieve" do
+      @queue.bind(@exchange)
+      @queue.publish('Hello World')
+      m = @queue.retrieve(:envelope=>true)
+      m[:message_body].should == 'Hello World'
+      m[:envelope].class.should == Java::ComRabbitmqClient::Envelope
+    end
+
+    it "should be able to get the message properties through retrieve" do
+      @queue.bind(@exchange)
+      @queue.publish('Hello World')
+      m = @queue.retrieve(:properties=>true)
+      m[:message_body].should == 'Hello World'
+      m[:properties].class.should == Java::ComRabbitmqClient::AMQP::BasicProperties
+    end
+    
+    it "should be able to set message properties through a hash passed to publish" do
+      @queue.bind(@exchange)
+      @queue.publish('Hello World', :priority=>1, :content_type=>'text/plain')
+      m = @queue.retrieve(:properties=>true)
+      m[:message_body].should == 'Hello World'
+      m[:properties].priority.should == 1
+    end
+
+    it "should be able to set message properties through a BasicProperties object passed to publish" do
+      @queue.bind(@exchange)
+      props = RabbitMQClient::MessageProperties::TEXT_PLAIN
+      props.priority = 1
+      @queue.publish('Hello World', props)
+      m = @queue.retrieve(:properties=>true)
+      m[:message_body].should == 'Hello World'
+      m[:properties].priority.should == 1
+    end
   end
   
   describe Queue, "Basic persistent queue" do
