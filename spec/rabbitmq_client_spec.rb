@@ -209,9 +209,11 @@ describe RabbitMQClient do
       lambda { @queue.marshaller = BrokenMarshaller }.should raise_error(RabbitMQClient::RabbitMQClientError)
     end
 
-    it "should be able to set the marshaller using the accessor" do
+    it "should be able to set a valid marshaller using the accessor" do
+      @queue.marshaller.should == RabbitMQClient::DefaultMarshaller
       @queue.bind(@exchange)
       lambda { @queue.marshaller = MyMarshaller }.should_not raise_error(RabbitMQClient::RabbitMQClientError)
+      @queue.marshaller.should == MyMarshaller
     end
     
     it "should be able to get the message envelope through retrieve" do
