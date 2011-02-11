@@ -19,17 +19,9 @@ class RabbitMQClient
     end
   
     def marshaller=(marshaller)
-      case marshaller
-      when false
-        @marshaller = nil
-      when nil
-        @marshaller = DefaultMarshaller
-      else
-        raise RabbitMQClientError, "invalid marshaller" unless (marshaller.nil? or (marshaller.respond_to? :load and marshaller.respond_to? :dump))
-        @marshaller = marshaller
-      end
+      @marshaller = RabbitMQClient.select_marshaller(marshaller)
     end
-  
+
     def bind(exchange, routing_key='')
       raise RabbitMQClientError, "queue and exchange have different durable properties" unless @durable == exchange.durable
       @routing_key = routing_key

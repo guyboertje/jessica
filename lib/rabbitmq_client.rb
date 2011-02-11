@@ -2,6 +2,9 @@ require 'java'
 require File.dirname(__FILE__) + '/commons-cli-1.1.jar'
 require File.dirname(__FILE__) + '/commons-io-1.2.jar'
 require File.dirname(__FILE__) + '/rabbitmq-client.jar'
+require File.dirname(__FILE__) + '/rabbitmq_client.rb'
+require File.dirname(__FILE__) + '/rabbitmq_queue.rb'
+require File.dirname(__FILE__) + '/rabbitmq_rpc_server.rb'
 
 class RabbitMQClient
   include ObjectSpace
@@ -27,10 +30,10 @@ class RabbitMQClient
   end
   
   class QueueConsumer < DefaultConsumer
-    def initialize(channel, block, marshaller=DefaultMarshaller)
+    def initialize(channel, block, marshaller=nil)
       @channel = channel
       @block = block
-      @marshaller = marshaller
+      @marshaller = RabbitMQClient.select_marshaller(marshaller)
       super(channel)
     end
     
@@ -72,6 +75,17 @@ class RabbitMQClient
   
   # Class Methods
   class << self
+    def select_marshaller(m)
+      case m
+      when false
+        nil
+      when nil
+        DefaultMarshaller
+      else
+        raise RabbitMQClientError, "invalid marshaller" unless (m.nil? or (m.respond_to? :load and m.respond_to? :dump))
+        m
+      end
+    end
   end
   
   attr_reader :marshaller
@@ -90,19 +104,12 @@ class RabbitMQClient
     @vhost = options[:vhost] || '/'
     
     #marshalling
-    case options[:marshaller]
-    when false
-      @marshaller = nil
-    when nil
-      @marshaller = DefaultMarshaller
-    else
-      @marshaller = options[:marshaller]
-    end
-    raise RabbitMQClientError, "invalid marshaller" unless (@marshaller.nil? or (@marshaller.respond_to? :load and @marshaller.respond_to? :dump))
+    @marshaller = RabbitMQClient.select_marshaller(options[:marshaller])
     
     # queues and exchanges
     @queues = {}
     @exchanges = {}
+    @rpc_servers = {}
     
     connect unless options[:no_auto_connect]
     # Disconnect before the object is destroyed
@@ -111,15 +118,7 @@ class RabbitMQClient
   end
 
   def marshaller=(marshaller)
-    case marshaller
-    when false
-      @marshaller = nil
-    when nil
-      @marshaller = DefaultMarshaller
-    else
-      raise RabbitMQClientError, "invalid marshaller" unless (marshaller.nil? or (marshaller.respond_to? :load and marshaller.respond_to? :dump))
-      @marshaller = marshaller
-    end
+    @marshaller = RabbitMQClient.select_marshaller(marshaller)
   end
   
   def connect
@@ -135,6 +134,7 @@ class RabbitMQClient
   end
   
   def disconnect
+    @rpc_servers.values.each { |s| s.close }
     @queues.values.each { |q| q.unbind }
     @channel.close
     @connection.close
@@ -153,5 +153,25 @@ class RabbitMQClient
   def exchange(name, type='fanout', durable=false)
     @exchanges[name] ||= Exchange.new(name, type, @channel, durable)
   end
+  
+  def rpc_server(name=nil, marshaller=false)
+    marsh = (marshaller == false) ? @marshaller : marshaller
+    bl = block_given? ? block : nil
+    svr = RabbitMQRpcServer.new(@channel, name, marsh, bl)
+    @rpc_servers[svr.queue_name] = svr
+  end
+  
+  def delete_rpc_server(svr)
+    if svr.kind_of?(String)
+      s = @rpc_servers[svr] ? [svr, @rpc_servers[svr]] : nil
+    else
+      s = @rpc_servers.rassoc(svr)
+    end
+    if s
+      s[1].close
+      @rpc_servers.delete(s[0])
+    end
+  end
+  
 end
 
