@@ -33,7 +33,7 @@ class RabbitMQClient
     def initialize(channel, block, marshaller=nil)
       @channel = channel
       @block = block
-      @marshaller = RabbitMQClient.select_marshaller(marshaller)
+      @marshaller = (marshaller == false) ? DefaultMarshaller : marshaller
       super(channel)
     end
     
@@ -57,12 +57,12 @@ class RabbitMQClient
     attr_reader :name
     attr_reader :durable
     
-    def initialize(name, type, channel, durable=false)
+    def initialize(name, type, channel, durable=false, auto_delete=false)
       @name = name
       @type = type
       @durable = durable
       @channel = channel
-      auto_delete = false
+      @auto_delete = auto_delete
       # Declare a non-passive, auto-delete exchange
       @channel.exchange_declare(@name, type.to_s, durable, auto_delete, nil)
       self
@@ -110,6 +110,7 @@ class RabbitMQClient
     @queues = {}
     @exchanges = {}
     @rpc_servers = {}
+    @rpc_clients = {}
     
     connect unless options[:no_auto_connect]
     # Disconnect before the object is destroyed
@@ -145,20 +146,28 @@ class RabbitMQClient
     @connection != nil
   end
   
-  def queue(name, durable=false, marshaller=false)
-    marsh = (marshaller == false) ? @marshaller : marshaller
+  def queue(name, durable=false, marshaller=nil)
+    marsh = RabbitMQClient.select_marshaller(marshaller)
     @queues[name] ||= Queue.new(name, @channel, durable, marsh)
   end
   
-  def exchange(name, type='fanout', durable=false)
-    @exchanges[name] ||= Exchange.new(name, type, @channel, durable)
+  def exchange(name, type='fanout', durable=false, auto_delete=false)
+    @exchanges[name] ||= Exchange.new(name, type, @channel, durable, auto_delete)
   end
   
-  def rpc_server(name=nil, marshaller=false)
-    marsh = (marshaller == false) ? @marshaller : marshaller
+  #def find_queue(name)
+  #  begin
+  #    dok = @channel.queueDeclarePassive(name)
+  #    dok.getQueue
+  #end
+  
+  def rpc_server(name=nil, exchange=nil, routing_key='', marshaller=nil, &block)
+    marsh = RabbitMQClient.select_marshaller(marshaller)
     bl = block_given? ? block : nil
-    svr = RabbitMQRpcServer.new(@channel, name, marsh, bl)
+    svr = RabbitMQRpcServer.new(@channel, name, exchange, routing_key, marsh, bl)
     @rpc_servers[svr.queue_name] = svr
+    svr.start
+    svr
   end
   
   def delete_rpc_server(svr)
@@ -168,10 +177,29 @@ class RabbitMQClient
       s = @rpc_servers.rassoc(svr)
     end
     if s
+      s[1].unbind_queue
       s[1].close
       @rpc_servers.delete(s[0])
     end
   end
   
+  def rpc_client(name, exchange, routing_key='', marshaller=nil)
+    marsh = RabbitMQClient.select_marshaller(marshaller)
+    client = RabbitMQRpcClient.new(@channel, name, exchange, routing_key, marsh)
+    @rpc_clients[client.name] = client
+    client
+  end
+  
+  def delete_rpc_client(client)
+    if client.kind_of?(String)
+      s = @rpc_clients[client] ? [client, @rpc_clients[client]] : nil
+    else
+      s = @rpc_clients.rassoc(client)
+    end
+    if s
+      s[1].close
+      @rpc_clients.delete(s[0])
+    end
+  end
 end
 

@@ -29,7 +29,7 @@ describe RabbitMQClient do
   describe Queue, "Basic non-persistent queue" do
     before(:each) do
       @queue = @client.queue('test_queue')
-      @exchange = @client.exchange('test_exchange', 'direct')
+      @exchange = @client.exchange('test_exchange_auto', 'direct', false, true)
     end
     
     after(:each) do
@@ -254,8 +254,9 @@ describe RabbitMQClient do
 
   describe Queue, "Basic, non-marshalled queue" do
     before(:each) do
-      @queue = @client.queue('test_queue', false, nil)
-      @exchange = @client.exchange('test_exchange', 'direct')
+      @queue = @client.queue('test_queue', false, false)
+      @exchange = @client.exchange('test_exchange_auto', 'direct', false, true)
+      @queue.purge
     end
 
     after(:each) do
@@ -318,7 +319,7 @@ describe RabbitMQClient do
   describe Queue, "Basic, client-defined marshalling queue" do
     before(:each) do
       @queue = @client.queue('test_queue', false, MyMarshaller)
-      @exchange = @client.exchange('test_exchange', 'direct')
+      @exchange = @client.exchange('test_exchange_auto', 'direct', false, true)
     end
 
     after(:each) do

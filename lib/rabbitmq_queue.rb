@@ -19,7 +19,8 @@ class RabbitMQClient
     end
   
     def marshaller=(marshaller)
-      @marshaller = RabbitMQClient.select_marshaller(marshaller)
+      @marshaller = (marshaller == false) ? DefaultMarshaller : marshaller
+      raise RabbitMQClientError, "invalid marshaller" unless @marshaller.nil? or (@marshaller.respond_to? :load and @marshaller.respond_to? :dump)
     end
 
     def bind(exchange, routing_key='')
