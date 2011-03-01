@@ -4,7 +4,8 @@ class RabbitMQClient
   include_class('com.rabbitmq.client.RpcServer')
   
   class RabbitMQRpcServer < RpcServer
-    attr_reader :queue_name, :marshaller, :exchange
+    attr_reader :queue_name, :marshaller, :exchange, :thread
+    
     def initialize(channel, name=nil, exchange=nil, routing_key='', marshaller=false, proc=nil)
       @marshaller = (marshaller == false) ? DefaultMarshaller : marshaller
       @channel = channel
@@ -38,9 +39,11 @@ class RabbitMQClient
       method(:meth).arity
     end
     
-    def handleCall(request_properties, request_body, reply_properties)
-      java_signature 'byte[] handleCall(AMQP.BasicProperties request_properties, byte[] request_body, AMQP.BasicProperties reply_properties)'
-      body = @marshaller.nil? ? request_body : @marshaller.load(request_body)
+    def handleCall(delivery, reply_properties)
+      java_signature 'byte[] handleCall(QueueingConsumer.Delivery delivery, AMQP.BasicProperties reply_properties)'
+      body = @marshaller.nil? ? delivery.get_body : @marshaller.load(delivery.get_body)
+      request_properties = delivery.get_properties
+      reply_properties ||= RabbitMQClient::MessageProperties::TEXT_PLAIN.clone      
       ["contentType", "contentEncoding", "deliveryMode", "priority", "correlationId", "replyTo"].each {|k| reply_properties.send(:"#{k}=", request_properties.send(:"#{k}"))}
       case @block.arity
       when 1
@@ -49,6 +52,8 @@ class RabbitMQClient
         ret = @block.call(body, reply_properties)
       when 3
         ret = @block.call(body, reply_properties, request_properties)
+      when 4
+        ret = @block.call(body, reply_properties, request_properties, delivery.get_envelope)
       end
       ret
     end

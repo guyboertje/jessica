@@ -21,7 +21,7 @@ end
 
 describe RabbitMQClient do
   before(:each) do
-    @rmqclient = RabbitMQClient.new
+    @rmqclient = RabbitMQClient.new(:marshaller=>false)
   end
   
   after(:each) do
@@ -68,6 +68,57 @@ describe RabbitMQClient do
       lambda { @rmqclient.channel.exchange_declare_passive("test_rpc_exchange") }.should_not raise_error(java.io.IOException)
     end
     
+    it "should be able to handle calls with a 1-arity block" do
+      @rmqclient.exchange('test_rpc_exchange', 'direct', false, true)
+      @svr = @rmqclient.rpc_server("test_rpc_server", 'test_rpc_exchange', '', false) { |m| m }
+      @client1 = @rmqclient.rpc_client("test1", "test_rpc_exchange", '', false)
+      Thread.new do
+        @ret1 = @client1.call("hello".to_java_bytes)
+      end
+      sleep 0.1
+      String.from_java_bytes(@ret1).should == "hello"
+      @rmqclient.delete_rpc_client("test1")
+      @rmqclient.delete_rpc_server(@svr.queue_name)
+    end
+    
+    it "should be able to handle calls with a 2-arity block" do
+      @rmqclient.exchange('test_rpc_exchange', 'direct', false, true)
+      @svr = @rmqclient.rpc_server("test_rpc_server", 'test_rpc_exchange', '', false) { |m, p| p.class.to_s.to_java_bytes }
+      @client1 = @rmqclient.rpc_client("test1", "test_rpc_exchange", '', false)
+      Thread.new do
+        @ret1 = @client1.call("hello".to_java_bytes)
+      end
+      sleep 0.1
+      String.from_java_bytes(@ret1).should =~ /::BasicProperties/
+      @rmqclient.delete_rpc_client("test1")
+      @rmqclient.delete_rpc_server(@svr.queue_name)
+    end
+    
+    it "should be able to handle calls with a 3-arity block" do
+      @rmqclient.exchange('test_rpc_exchange', 'direct', false, true)
+      @svr = @rmqclient.rpc_server("test_rpc_server", 'test_rpc_exchange', '', false) { |m, p, r| r.class.to_s.to_java_bytes }
+      @client1 = @rmqclient.rpc_client("test1", "test_rpc_exchange", '', false)
+      Thread.new do
+        @ret1 = @client1.call("hello".to_java_bytes)
+      end
+      sleep 0.1
+      String.from_java_bytes(@ret1).should =~ /::BasicProperties/
+      @rmqclient.delete_rpc_client("test1")
+      @rmqclient.delete_rpc_server(@svr.queue_name)
+    end
+    
+    it "should be able to handle calls with a 4-arity block" do
+      @rmqclient.exchange('test_rpc_exchange', 'direct', false, true)
+      @svr = @rmqclient.rpc_server("test_rpc_server", 'test_rpc_exchange', '', false) { |m, p, r, e| e.class.to_s.to_java_bytes }
+      @client1 = @rmqclient.rpc_client("test1", "test_rpc_exchange", '', false)
+      Thread.new do
+        @ret1 = @client1.call("hello".to_java_bytes)
+      end
+      sleep 0.1
+      String.from_java_bytes(@ret1).should =~ /::Envelope/
+      @rmqclient.delete_rpc_client("test1")
+      @rmqclient.delete_rpc_server(@svr.queue_name)
+    end
   end
   
   describe RabbitMQClient::RabbitMQRpcServer do
@@ -82,24 +133,24 @@ describe RabbitMQClient do
     
     describe RabbitMQClient::RabbitMQRpcClient do
       before(:each) do
-        @client1 = @rmqclient.rpc_client("test1", "test_rpc_exchange", '')
-        @client2 = @rmqclient.rpc_client("test2", "test_rpc_exchange", '')
+        @client1 = @rmqclient.rpc_client("test1", "test_rpc_exchange", '', false)
+        @client2 = @rmqclient.rpc_client("test2", "test_rpc_exchange", '', false)
       end
       after(:each) do
         @rmqclient.delete_rpc_client("test1")
         @rmqclient.delete_rpc_client("test2")
       end
     
-      it "should receive it's message back" do
+      it "should receive the correct message back" do
         Thread.new do
-          @ret1 = @client1.call("hello")
+          @ret1 = @client1.call("hello".to_java_bytes)
         end
         Thread.new do
-          @ret2 = @client2.call("goodbye")
+          @ret2 = @client2.call("goodbye".to_java_bytes)
         end
-        sleep 1
-        @ret1.should == "hello"      
-        @ret2.should == "goodbye"      
+        sleep 0.1
+        String.from_java_bytes(@ret1).should == "hello"      
+        String.from_java_bytes(@ret2).should == "goodbye"      
       end
     end
   end
