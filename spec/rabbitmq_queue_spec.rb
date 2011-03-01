@@ -68,7 +68,7 @@ describe RabbitMQClient do
       end
       @queue.publish("1")
       @queue.publish("2")
-      sleep 1
+      sleep 0.1
       a.should == 3
     end
 
@@ -80,7 +80,7 @@ describe RabbitMQClient do
       end
       @queue.publish("1")
       @queue.publish("2")
-      sleep 1
+      sleep 0.1
       a.should == [false,false]
     end
 
@@ -92,7 +92,7 @@ describe RabbitMQClient do
       end
       @queue.publish("1")
       @queue.publish("2")
-      sleep 1
+      sleep 0.1
       a.should == [false,false]
     end
 
@@ -111,7 +111,7 @@ describe RabbitMQClient do
       end
       @queue.publish("1")
       @queue.publish("2")
-      sleep 1
+      sleep 0.1
       a.should == 3
     end
 
@@ -130,7 +130,7 @@ describe RabbitMQClient do
       end
       @queue.publish("1")
       @queue.publish("2")
-      sleep 1
+      sleep 0.1
       a.should == [false,false]
     end
 
@@ -149,7 +149,7 @@ describe RabbitMQClient do
       end
       @queue.publish("1")
       @queue.publish("2")
-      sleep 1
+      sleep 0.1
       a.should == [false,false]
     end
 
@@ -246,7 +246,7 @@ describe RabbitMQClient do
       end
       @queue.persistent_publish("1")
       @queue.persistent_publish("2")
-      sleep 1
+      sleep 0.1
       a.should == 3
     end
   end
@@ -287,7 +287,7 @@ describe RabbitMQClient do
       end
       @queue.publish(Marshal.dump('1').to_java_bytes)
       @queue.publish(Marshal.dump('2').to_java_bytes)
-      sleep 1
+      sleep 0.1
       a.should == 3
     end
 
@@ -306,7 +306,7 @@ describe RabbitMQClient do
       end
       @queue.publish(Marshal.dump('1').to_java_bytes)
       @queue.publish(Marshal.dump('2').to_java_bytes)
-      sleep 1
+      sleep 0.1
       a.should == 3
     end
 
@@ -350,7 +350,7 @@ describe RabbitMQClient do
       end
       @queue.publish('1')
       @queue.publish('2')
-      sleep 1
+      sleep 0.1
       a.should == 3
     end
 
@@ -369,7 +369,7 @@ describe RabbitMQClient do
       end
       @queue.publish("1")
       @queue.publish("2")
-      sleep 1
+      sleep 0.1
       a.should == 3
     end
   end
