@@ -149,9 +149,29 @@ describe RabbitMQClient do
           @ret2 = @client2.call("goodbye".to_java_bytes)
         end
         sleep 0.1
-        String.from_java_bytes(@ret1).should == "hello"      
-        String.from_java_bytes(@ret2).should == "goodbye"      
+        String.from_java_bytes(@ret1).should == "hello"
+        String.from_java_bytes(@ret2).should == "goodbye"
       end
+      
+    end
+  end
+  
+  describe RabbitMQClient::RabbitMQRpcServer do
+    after(:each) do
+      @rmqclient.delete_rpc_server(@svr.queue_name)
+    end
+    
+    it "should be able to set a property" do
+      @rmqclient.exchange('test_rpc_exchange', 'direct', false, true)
+      @svr = @rmqclient.rpc_server("test_rpc_server", 'test_rpc_exchange', '', false) { |m, p, r| r.userId.to_java_bytes }
+      @client1 = @rmqclient.rpc_client("test1", "test_rpc_exchange", '', false)
+      Thread.new do
+        @ret1 = @client1.call("hello".to_java_bytes, "userId"=>'123a')
+      end
+      sleep 0.1
+      String.from_java_bytes(@ret1).should == "123a"
+      @rmqclient.delete_rpc_client("test1")
+      @rmqclient.delete_rpc_server(@svr.queue_name)
     end
   end
 end

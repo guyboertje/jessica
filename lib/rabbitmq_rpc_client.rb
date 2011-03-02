@@ -16,14 +16,11 @@ class RabbitMQClient
       @client = RpcClient.new(@channel, @exchange, @routing_key)
     end
     
-    def call(message_body, props=nil)
+    def call(message_body, props={})
       body = @marshaller.nil? ? message_body : @marshaller.dump(message_body)
-      case
-      when props.nil?
+      if props.kind_of?(Hash)
         properties = RabbitMQClient::MessageProperties::TEXT_PLAIN.clone
-      when props.kind_of?(Hash)
-        properties = RabbitMQClient::MessageProperties::TEXT_PLAIN.clone
-        ["contentType", "contentEncoding", "deliveryMode", "priority", "userId", "appId"].each { |k| properties.send(:"#{k}=", props.send(:"#{k}")) }
+        ["contentType", "contentEncoding", "deliveryMode", "priority", "userId", "appId"].each { |k| properties.send(:"#{k}=", props[k]) unless props[k].nil? }
       else
         properties = props
       end
