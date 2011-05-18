@@ -190,6 +190,46 @@ describe RabbitMQClient do
       a.should == [false,false]
     end
 
+    it "should be able to subscribe to a queue using reactive_loop_subscribe with a implicit ack" do
+      a = []
+      @queue.bind(@exchange)
+      Thread.new do
+        begin
+          timeout(1) do
+            @queue.reactive_loop_subscribe do |msg|
+              a << msg.body
+              #msg.ack!
+            end
+          end
+        rescue Timeout::Error => e
+        end
+      end
+      @queue.publish("1")
+      @queue.publish("2")
+      sleep 1
+      a.should == ["1","2"]
+    end
+    
+    it "should be able to subscribe to a queue using reactive_loop_subscribe with an explicit reject" do
+      a = []
+      @queue.bind(@exchange)
+      Thread.new do
+        begin
+          timeout(2) do
+            @queue.reactive_loop_subscribe do |msg|
+              a << msg.body
+              msg.reject!
+            end
+          end
+        rescue Timeout::Error => e
+        end
+      end
+      @queue.publish("1")
+      sleep 2
+      puts "---------------- #{a.inspect}"
+      a.all?{|v| v == "1"}.should be_true
+    end
+    
     it "should raise an exception if binding a persistent queue with a non-persistent exchange and vice versa" do
       persistent_queue = @client.queue('test_queue1', true)
       persistent_exchange = @client.exchange('test_exchange1', 'fanout', true)

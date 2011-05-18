@@ -50,6 +50,8 @@ class RabbitMQClient
     end
   end
   
+  
+  
   class Queue
     attr_reader :marshaller
     
@@ -141,14 +143,14 @@ class RabbitMQClient
     end
     
     def subscribe(&block)
-      no_ack = false
-      @channel.basic_consume(@name, no_ack, QueueConsumer.new(@channel, block, @marshaller))
+      auto_ack = false
+      @channel.basic_consume(@name, auto_ack, QueueConsumer.new(@channel, block, @marshaller))
     end
     
     def loop_subscribe(&block)
-      no_ack = false
+      auto_ack = false
       consumer = QueueingConsumer.new(@channel)
-      @channel.basic_consume(@name, no_ack, consumer)
+      @channel.basic_consume(@name, auto_ack, consumer)
       loop do
         begin
           delivery = consumer.next_delivery
@@ -165,6 +167,23 @@ class RabbitMQClient
             block.call message_body, properties, envelope
           end
           @channel.basic_ack(delivery.get_envelope.get_delivery_tag, false)
+        rescue InterruptedException => ie
+          next
+        end
+      end
+    end
+    
+    def reactive_loop_subscribe(&block) #block take 1 arg, a ReactiveMessage 
+      auto_ack = false
+      consumer = QueueingConsumer.new(@channel)
+      @channel.basic_consume(@name, auto_ack, consumer)
+      loop do
+        begin
+          delivery = consumer.next_delivery
+          message_body = @marshaller.nil? ? nil : @marshaller.send(:load, delivery.get_body)
+          remsg = ReactiveMessage.new(@channel, delivery, message_body)
+          block.call remsg
+          @channel.basic_ack(delivery.envelope.delivery_tag, false) if remsg.should_acknowledge?
         rescue InterruptedException => ie
           next
         end
@@ -188,6 +207,27 @@ class RabbitMQClient
     end
   end
   
+  class ReactiveMessage
+    attr_reader :body,:envelope,:properties
+    def initialize(channel,delivery,body = nil)
+      @channel,@delivery = channel,delivery
+      @body = body || delivery.body
+      @envelope = delivery.envelope
+      @properties = delivery.properties
+      @reacted = false
+    end
+    def ack!
+      @channel.basic_ack(@envelope.get_delivery_tag, false)
+      @reacted = true
+    end
+    def reject!(requeue = true)
+      @channel.basic_reject(delivery.get_envelope.get_delivery_tag, requeue)
+      @reacted = true
+    end
+    def should_acknowledge?
+      !@reacted
+    end
+  end
   class Exchange
     attr_reader :name
     attr_reader :durable
