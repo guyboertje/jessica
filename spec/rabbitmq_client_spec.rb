@@ -198,7 +198,6 @@ describe RabbitMQClient do
           timeout(1) do
             @queue.reactive_loop_subscribe do |msg|
               a << msg.body
-              #msg.ack!
             end
           end
         rescue Timeout::Error => e
@@ -296,14 +295,20 @@ describe RabbitMQClient do
     end
     
     it "should be able to subscribe to a queue using reactive_loop_subscribe with an explicit reject" do
-      a = []
+      a = 0
+      redeliver_flag = nil
       @queue.bind(@exchange)
       Thread.new do
         begin
           timeout(0.25) do
             @queue.reactive_loop_subscribe do |msg|
-              print '+'
-              msg.reject!
+              a += 1
+              if a > 1
+                redeliver_flag = msg.envelope.redeliver?
+                msg.ack!
+              else
+                msg.reject!
+              end
             end
           end
         rescue Timeout::Error => e
@@ -311,10 +316,10 @@ describe RabbitMQClient do
       end
       @queue.persistent_publish("1")
       sleep 0.25
-      a.should == []
+      a.should > 1
+      redeliver_flag.should be_true
     end
     
-    #should get the previously rejected message as well
     it "should be able to subscribe with a callback function" do
       a = 0
       @queue.bind(@exchange)
@@ -324,7 +329,7 @@ describe RabbitMQClient do
       @queue.persistent_publish("1")
       @queue.persistent_publish("2")
       sleep 1
-      a.should == 4
+      a.should == 3
     end
   end
 
