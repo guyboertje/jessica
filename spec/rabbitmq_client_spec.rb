@@ -210,26 +210,6 @@ describe RabbitMQClient do
       a.should == ["1","2"]
     end
     
-    it "should be able to subscribe to a queue using reactive_loop_subscribe with an explicit reject" do
-      a = []
-      @queue.bind(@exchange)
-      Thread.new do
-        begin
-          timeout(2) do
-            @queue.reactive_loop_subscribe do |msg|
-              a << msg.body
-              msg.reject!
-            end
-          end
-        rescue Timeout::Error => e
-        end
-      end
-      @queue.publish("1")
-      sleep 2
-      puts "---------------- #{a.inspect}"
-      a.all?{|v| v == "1"}.should be_true
-    end
-    
     it "should raise an exception if binding a persistent queue with a non-persistent exchange and vice versa" do
       persistent_queue = @client.queue('test_queue1', true)
       persistent_exchange = @client.exchange('test_exchange1', 'fanout', true)
@@ -315,6 +295,25 @@ describe RabbitMQClient do
       @queue.retrieve.should == 'Hello World'
     end
     
+    it "should be able to subscribe to a queue using reactive_loop_subscribe with an explicit reject" do
+      a = []
+      @queue.bind(@exchange)
+      Thread.new do
+        begin
+          timeout(1) do
+            @queue.reactive_loop_subscribe do |msg|
+              msg.reject!
+            end
+          end
+        rescue Timeout::Error => e
+        end
+      end
+      @queue.persistent_publish("1")
+      sleep 1
+      a.should == []
+    end
+    
+    #should get the previously rejected message as well
     it "should be able to subscribe with a callback function" do
       a = 0
       @queue.bind(@exchange)
@@ -324,10 +323,9 @@ describe RabbitMQClient do
       @queue.persistent_publish("1")
       @queue.persistent_publish("2")
       sleep 1
-      a.should == 3
+      a.should == 4
     end
   end
-
 
   describe Queue, "Basic, non-marshalled queue" do
     before(:each) do
