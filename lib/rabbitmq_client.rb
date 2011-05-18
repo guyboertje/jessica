@@ -126,16 +126,16 @@ class RabbitMQClient
       no_ack = opts[:no_ack] ? opts[:no_ack] : false
       response = @channel.basic_get(@name, no_ack)
       if response
-        props = response.get_props
-        message_body = @marshaller.nil? ? response.get_body : @marshaller.send(:load, response.get_body)
-        delivery_tag = response.get_envelope.get_delivery_tag
+        props = response.props
+        message_body = @marshaller.nil? ? response.body : @marshaller.send(:load, response.body)
+        delivery_tag = response.envelope.delivery_tag
         @channel.basic_ack(delivery_tag, false)
       end
       unless opts.empty?
         resp = {}
         resp[:message_body] = message_body
         resp[:properties] = props unless opts[:properties].nil?
-        resp[:envelope] = response.get_envelope unless opts[:envelope].nil?
+        resp[:envelope] = response.envelope unless opts[:envelope].nil?
         resp
       else
         message_body
@@ -217,17 +217,18 @@ class RabbitMQClient
       @reacted = false
     end
     def ack!
-      @channel.basic_ack(@envelope.get_delivery_tag, false)
+      @channel.basic_ack(@envelope.delivery_tag, false)
       @reacted = true
     end
     def reject!(requeue = true)
-      @channel.basic_reject(delivery.get_envelope.get_delivery_tag, requeue)
+      @channel.basic_reject(@envelope.delivery_tag, requeue)
       @reacted = true
     end
     def should_acknowledge?
       !@reacted
     end
   end
+  
   class Exchange
     attr_reader :name
     attr_reader :durable
@@ -302,12 +303,12 @@ class RabbitMQClient
   
   def connect
     conn_factory = ConnectionFactory.new
-    conn_factory.set_username(@username)
-    conn_factory.set_password(@password)
-    conn_factory.set_virtual_host(@vhost)
-    conn_factory.set_requested_heartbeat(0)
-    conn_factory.set_host(@host)
-    conn_factory.set_port(@port)
+    conn_factory.username = @username
+    conn_factory.password = @password
+    conn_factory.virtual_host = @vhost
+    conn_factory.requested_heartbeat = 0
+    conn_factory.host = @host
+    conn_factory.port = @port
     @connection = conn_factory.new_connection
     @channel = @connection.create_channel
   end

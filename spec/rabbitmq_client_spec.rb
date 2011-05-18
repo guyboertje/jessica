@@ -300,8 +300,9 @@ describe RabbitMQClient do
       @queue.bind(@exchange)
       Thread.new do
         begin
-          timeout(1) do
+          timeout(0.25) do
             @queue.reactive_loop_subscribe do |msg|
+              print '+'
               msg.reject!
             end
           end
@@ -309,7 +310,7 @@ describe RabbitMQClient do
         end
       end
       @queue.persistent_publish("1")
-      sleep 1
+      sleep 0.25
       a.should == []
     end
     
