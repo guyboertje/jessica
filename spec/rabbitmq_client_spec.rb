@@ -469,7 +469,7 @@ describe RabbitMQClient do
       @exchange = @client.exchange('test_direct_durable_exchange', 'direct', true)
       @publish_return = @publish_ack = nil
       @start = @stop = 0
-      @client.register_callback(:return) {|ret| @publish_return = ret; @stop = java.lang.System.nano_time}
+      @client.register_callback(:return) {|ret| @publish_return = ret} #; @stop = java.lang.System.nano_time}
       @client.register_callback(:ack) {|ret| @publish_ack = ret}
       @queue.bind(@exchange,"black")
     end
@@ -486,7 +486,7 @@ describe RabbitMQClient do
     end
 
     it "should be able to publish mandatory with the wrong routing key and get a returned message" do
-      @start = java.lang.System.nano_time
+      #@start = java.lang.System.nano_time
       @exchange.persistent_publish('Hello World', 'red',  RabbitMQClient::MessageProperties::PERSISTENT_TEXT_PLAIN, true)
       sleep 0.2
       #puts "","time (us) to return a reject message: #{((@stop - @start)/1000).to_i}"
