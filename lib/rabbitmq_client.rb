@@ -325,8 +325,8 @@ class RabbitMQClient
     @port = options[:port] || 5672
 
     # login details
-    @username = options[:username] || 'guest'
-    @password = options[:password] || 'guest'
+    @username = options[:user] || options[:username] || 'guest'
+    @password = options[:pass] || options[:password] || 'guest'
     @vhost = options[:vhost] || '/'
 
     # queues and exchanges
