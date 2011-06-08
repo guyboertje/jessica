@@ -20,20 +20,6 @@ class RabbitMQClient
 
   class RabbitMQClientError < StandardError;end
 
-  class DefaultMarshaller
-    def self.load(body)
-      Marshal.load(body)
-    end
-    def self.dump(message_body)
-      Marshal.dump(message_body)
-    end
-  end
-
-  class NoMarshaller
-    def self.load(body) body; end
-    def self.dump(message_body) message_body; end
-  end
-
   class ReturnedMessageListener
     include ReturnListener
     def initialize(callable)
@@ -66,17 +52,15 @@ class RabbitMQClient
   end
 
   class QueueConsumer < DefaultConsumer
-    def initialize(channel, block, marshaller=DefaultMarshaller)
+    def initialize(channel, block)
       @channel = channel
       @block = block
-      @marshaller = marshaller
       super(channel)
     end
 
     def handleDelivery(consumer_tag, envelope, properties, body)
       delivery_tag = envelope.get_delivery_tag
-      body_ = String.from_java_bytes(body)
-      message_body = @marshaller.nil? ? body_ : @marshaller.send(:load, body_)
+      message_body = String.from_java_bytes(body)
       # TODO: Do we need to do something with properties?
       case @block.arity
       when 1
@@ -91,33 +75,17 @@ class RabbitMQClient
   end
 
   class Queue
-    attr_reader :name, :marshaller
+    attr_reader :name
 
-    def initialize(name, channel, durable=false, marshaller=false, parent_marshaller=nil)
+    def initialize(name, channel, opts={}, &block)
       @name = name
-      @durable = durable
+      @durable,auto_delete,@args = opts.values_at(:durable,:auto_delete,:args)
       @channel = channel
       exclusive = false
-      auto_delete = false
-      args = nil
-      @channel.queue_declare(name, durable, exclusive, auto_delete, args)
-      @parent_marshaller = parent_marshaller
-      self.marshaller = marshaller
+      @auto_delete = auto_delete || false
+      @channel.queue_declare(name, @durable, exclusive, @auto_delete, @args)
+      block.call self if &block
       self
-    end
-
-    def marshaller=(marshaller)
-      case marshaller
-      when nil
-        @marshaller = @parent_marshaller
-      when false
-        @marshaller = nil
-      when :default, 'default'
-        @marshaller = DefaultMarshaller
-      else
-        raise RabbitMQClientError, "invalid marshaller" unless (marshaller.nil? or (marshaller.respond_to? :load and marshaller.respond_to? :dump))
-        @marshaller = marshaller
-      end
     end
 
     def bind(exchange, binding_keys='')
@@ -139,14 +107,12 @@ class RabbitMQClient
     end
 
     def retrieve(opts={})
-      auto_bind
       message_body = nil
       no_ack = opts[:no_ack] ? opts[:no_ack] : false
       response = @channel.basic_get(@name, no_ack)
       if response
         props = response.props
-        body = String.from_java_bytes(response.body)
-        message_body = @marshaller.nil? ? body : @marshaller.load(body)
+        message_body = String.from_java_bytes(response.body)
         delivery_tag = response.envelope.delivery_tag
         @channel.basic_ack(delivery_tag, false)
       end
@@ -163,7 +129,7 @@ class RabbitMQClient
 
     def subscribe(&block)
       auto_ack = false
-      @channel.basic_consume(@name, auto_ack, QueueConsumer.new(@channel, block, @marshaller))
+      @channel.basic_consume(@name, auto_ack, QueueConsumer.new(@channel, block))
     end
 
     def loop_subscribe(&block)
@@ -173,8 +139,7 @@ class RabbitMQClient
       loop do
         begin
           delivery = consumer.next_delivery
-          body = String.from_java_bytes(delivery.get_body)
-          message_body = @marshaller.nil? ? body : @marshaller.load(body)
+          message_body = String.from_java_bytes(delivery.get_body)
           case block.arity
           when 1
             block.call message_body
@@ -200,8 +165,7 @@ class RabbitMQClient
       loop do
         begin
           delivery = consumer.next_delivery
-          body = String.from_java_bytes(delivery.get_body)
-          message_body = @marshaller.nil? ? body : @marshaller.load(body)
+          message_body = String.from_java_bytes(delivery.get_body)
           remsg = ReactiveMessage.new(@channel, delivery, message_body)
           block.call remsg
           @channel.basic_ack(delivery.envelope.delivery_tag, false) if remsg.should_acknowledge?
@@ -218,14 +182,6 @@ class RabbitMQClient
 
     def delete
       @channel.queue_delete(@name)
-    end
-
-    protected
-    def auto_bind
-      unless @exchange
-        exchange = Exchange.new("#{@name}_exchange", 'fanout', @channel, @durable)
-        self.bind(exchange)
-      end
     end
   end
 
@@ -252,34 +208,25 @@ class RabbitMQClient
   end
 
   class Exchange
-    attr_reader :name, :durable, :marshaller
+    attr_reader :name, :durable
 
-    def initialize(name, type, channel, durable=false, marshaller=false, parent_marshaller=nil)
+    def initialize(name, type, channel, opts={})
       @name = name
       @type = type
-      @durable = durable
       @channel = channel
-      auto_delete = false
+
+      @durable, auto_delete,@args = opts.values_at(:durable,:auto_delete,:args)
+      @auto_delete = auto_delete || false
       # Declare a non-passive, auto-delete exchange
-      @channel.exchange_declare(@name, type.to_s, durable, auto_delete, nil)
-      @parent_marshaller = parent_marshaller
-      self.marshaller = marshaller
+      @channel.exchange_declare(@name, type.to_s, durable, auto_delete, @args)
       self
     end
 
-    def marshaller=(marshaller)
-      case marshaller
-      when nil
-        @marshaller = @parent_marshaller
-      when false
-        @marshaller = nil
-      when :default, 'default'
-        @marshaller = DefaultMarshaller
-      else
-        raise RabbitMQClientError, "invalid marshaller" unless (marshaller.nil? or (marshaller.respond_to? :load and marshaller.respond_to? :dump))
-        @marshaller = marshaller
-      end
+    def match_opts(opts)
+      dur,aut,arg = opts.values_at(:durable,:auto_delete,:args)
+      @durable == dur && @auto_delete == aut && @args == arg
     end
+
     # Set props for different type of message. Currently they are:
     # RabbitMQClient::MessageProperties::MINIMAL_BASIC
     # RabbitMQClient::MessageProperties::MINIMAL_PERSISTENT_BASIC
@@ -288,7 +235,6 @@ class RabbitMQClient
     # RabbitMQClient::MessageProperties::TEXT_PLAIN
     # RabbitMQClient::MessageProperties::PERSISTENT_TEXT_PLAIN
     def publish(message_body, routing_key='', props=RabbitMQClient::MessageProperties::TEXT_PLAIN, mandatory=false, immediate=false)
-      message_body = @marshaller.nil? ? message_body : @marshaller.dump(message_body)
       raise RabbitMQClientError, "message cannot be converted to java bytes for publishing" unless message_body.respond_to?(:to_java_bytes)
       if props.kind_of? Hash
         properties = Java::ComRabbitmqClient::AMQP::BasicProperties.new()
@@ -314,7 +260,6 @@ class RabbitMQClient
   class << self
   end
 
-  attr_reader :marshaller
   attr_reader :channel
   attr_reader :connection
 
@@ -334,24 +279,9 @@ class RabbitMQClient
     @exchanges = {}
 
     connect unless options[:no_auto_connect]
-    self.marshaller = options[:marshaller]
     # Disconnect before the object is destroyed
     define_finalizer(self, lambda {|id| self.disconnect if self.connected? })
     self
-  end
-
-  def marshaller=(marshaller)
-    case marshaller
-    when nil
-      @marshaller = NoMarshaller
-    when false
-      @marshaller = nil
-    when :default, 'default'
-      @marshaller = DefaultMarshaller
-    else
-      raise RabbitMQClientError, "invalid marshaller" unless (marshaller.nil? or (marshaller.respond_to? :load and marshaller.respond_to? :dump))
-      @marshaller = marshaller
-    end
   end
 
   def connect
@@ -387,12 +317,20 @@ class RabbitMQClient
     @connection != nil
   end
 
-  def queue(name, durable=false, marshaller=nil)
-    @queues[name] ||= Queue.new(name, @channel, durable, marshaller,@marshaller)
+  def find_queue name
+    @queues[name]
   end
 
-  def exchange(name, type='fanout', durable=false, marshaller=nil)
-    @exchanges[name] ||= Exchange.new(name, type, @channel, durable, marshaller,@marshaller)
+  def queue(name, opts)
+    @queues[name] = Queue.new(name, @channel, opts)
+  end
+
+  def find_exchange name
+    @exchanges[name]
+  end
+
+  def exchange(name, type='fanout', opts)
+    @exchanges[name] = Exchange.new(name, type, @channel, opts)
   end
 end
 
