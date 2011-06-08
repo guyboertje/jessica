@@ -77,7 +77,7 @@ class RabbitMQClient
   class Queue
     attr_reader :name
 
-    def initialize(name, channel, opts={}, &block)
+    def initialize(name, channel, opts={})
       @name = name
       @durable,auto_delete,@args = opts.values_at(:durable,:auto_delete,:args)
       @channel = channel
@@ -85,7 +85,6 @@ class RabbitMQClient
       @auto_delete = auto_delete || false
       @bindings = {}
       @channel.queue_declare(name, @durable, exclusive, @auto_delete, @args)
-      block.call self if &block
       self
     end
 
