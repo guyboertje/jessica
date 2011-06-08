@@ -83,27 +83,28 @@ class RabbitMQClient
       @channel = channel
       exclusive = false
       @auto_delete = auto_delete || false
+      @bindings = {}
       @channel.queue_declare(name, @durable, exclusive, @auto_delete, @args)
       block.call self if &block
       self
     end
 
-    def bind(exchange, binding_keys='')
-      raise RabbitMQClientError, "queue and exchange have different durable properties" unless @durable == exchange.durable
-      @binding_keys = (binding_keys.is_a?(Array)) ? binding_keys : [binding_keys]
-      @exchange = exchange
-      @binding_keys.each do |key|
-        @channel.queue_bind(@name, @exchange.name, key)
-      end
+    def match_opts(opts)
+      dur,aut,arg = opts.values_at(:durable,:auto_delete,:args)
+      @durable == dur && @auto_delete == aut && @args == arg
+    end
+
+    #@queue.bind @exchange, :routing_key => 'messages.#'
+    def bind(exchange, opts)
+      key = opts[:routing_key]
+      @bindings[exchange] = opts
+      @channel.queue_bind(@name, exchange, key)
       self
     end
 
-    def unbind(binding_keys=nil)
-      return unless @exchange
-      keys = binding_keys || @binding_keys
-      keys.each do |key|
-        @channel.queue_unbind(@name, @exchange.name, key)
-      end
+    def unbind(exchange, opts)
+      key = opts[:routing_key]
+      @channel.queue_unbind(@name, exchange, key)
     end
 
     def retrieve(opts={})
@@ -158,8 +159,8 @@ class RabbitMQClient
       end
     end
 
-    def reactive_loop_subscribe(&block) #block take 1 arg, a ReactiveMessage
-      auto_ack = false
+    def reactive_loop_subscribe(opts={}, &block) #block take 1 arg, a ReactiveMessage
+      auto_ack = opts[:auto_ack] || false
       consumer = QueueingConsumer.new(@channel)
       @channel.basic_consume(@name, auto_ack, consumer)
       loop do
