@@ -2,7 +2,7 @@
 
 spec = Gem::Specification.new do |s|
   s.name = 'rabbitmq-jruby-client'
-  s.version = '0.9.1'
+  s.version = '0.9.2'
   s.authors = ['Guy Boertje','Jerry Luk']
   s.email = 'jerryluk@gmail.com'
   s.date = '2009-02-09'

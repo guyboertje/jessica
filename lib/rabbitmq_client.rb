@@ -98,13 +98,13 @@ class RabbitMQClient
     def bind(exchange, opts)
       key = opts[:routing_key]
       @bindings[exchange] = opts
-      @channel.queue_bind(@name, exchange, key)
+      @channel.queue_bind(@name, exchange.name, key)
       self
     end
 
     def unbind(exchange, opts)
       key = opts[:routing_key]
-      @channel.queue_unbind(@name, exchange, key)
+      @channel.queue_unbind(@name, exchange.name, key)
     end
 
     def retrieve(opts={})
