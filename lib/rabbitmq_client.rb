@@ -291,7 +291,7 @@ class RabbitMQClient
 
       internal_publish msg, routing_key, properties, mandatory, immediate
 
-      feedback_queue = SizedQueue.new(1) if returns || acks
+      feedback_queue = SizedQueue.new(1) if returns || confirms
       if returns || confirms
         feedback_queue = SizedQueue.new(1)
         @channel.return_listener = ReturnedMessageListener.new(lambda {|reply| feedback_queue << reply}) if returns
