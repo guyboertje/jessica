@@ -216,7 +216,7 @@ class RabbitMQClient
       @durable, auto_delete,@args = opts.values_at(:durable,:auto_delete,:args)
       @auto_delete = auto_delete || false
       # Declare a non-passive, auto-delete exchange
-      @channel.exchange_declare(@name, type.to_s, durable, auto_delete, @args)
+      @channel.exchange_declare(@name, type.to_s, durable, @auto_delete, @args)
       self
     end
 
