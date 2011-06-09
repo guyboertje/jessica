@@ -285,13 +285,9 @@ class RabbitMQClient
         end
       end
 
-      returns  = opts[:listen_for_returns]
-      confirms = opts[:listen_for_confirms]
+      returns, confirms = opts.values_at(:listen_for_returns,:listen_for_confirms)
       time_out = opts[:time_out] || 0.01
 
-      internal_publish msg, routing_key, properties, mandatory, immediate
-
-      feedback_queue = SizedQueue.new(1) if returns || confirms
       if returns || confirms
         feedback_queue = SizedQueue.new(1)
         @channel.return_listener = ReturnedMessageListener.new(lambda {|reply| feedback_queue << reply}) if returns
@@ -305,9 +301,10 @@ class RabbitMQClient
           sleep n
           feedback_queue << {:kind => "TIME_OUT"}
         end
-        feedback_queue.pop
+        ret = feedback_queue.pop
         @channel.return_listener = nil if returns
         @channel.confirm_listener = nil if confirms
+        ret
       end
     end
 
