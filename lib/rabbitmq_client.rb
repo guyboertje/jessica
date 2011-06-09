@@ -22,6 +22,7 @@ class RabbitMQClient
 
   class ReturnedMessageListener
     include ReturnListener
+
     def initialize(callable)
       @callable = callable
     end
@@ -180,9 +181,6 @@ class RabbitMQClient
       @channel.queue_purge(@name)
     end
 
-    def delete
-      @channel.queue_delete(@name)
-    end
   end
 
   class ReactiveMessage
@@ -227,6 +225,93 @@ class RabbitMQClient
       @durable == dur && @auto_delete == aut && @args == arg
     end
 
+#   PUBLISH_OPTS = {
+#     :immediate => false,
+#     :mandatory => true,
+#     :persistent => true,
+#     :routing_key => 'messages.xyz'
+#   }
+#
+# @option options [String] :routing_key (nil)  Specifies message routing key. Routing key determines
+#                                      what queues messages are delivered to (exact routing algorithms vary
+#                                      between exchange types).
+#
+# @option options [Boolean] :mandatory (false) This flag tells the server how to react if the message cannot be
+#                                      routed to a queue. If message is mandatory, the server will return
+#                                      unroutable message back to the client with basic.return AMQPmethod.
+#                                      If message is not mandatory, the server silently drops the message.
+#
+# @option options [Boolean] :immediate (false) This flag tells the server how to react if the message cannot be
+#                                      routed to a queue consumer immediately.  If this flag is set, the
+#                                      server will return an undeliverable message with a Return method.
+#                                      If this flag is zero, the server will queue the message, but with
+#                                      no guarantee that it will ever be consumed.
+#
+# @option options [Boolean] :persistent (false) When true, this message will be persisted to disk and remain in the queue until
+#                                       it is consumed. When false, the message is only kept in a transient store
+#                                       and will lost in case of server restart.
+#                                       When performance and latency are more important than durability, set :persistent => false.
+#                                       If durability is more important, set :persistent => true.
+#
+# @option options [String] :content_type (application/octet-stream) Content-type of message payload.
+    def publish(msg, opts)
+      routing_key = opts[:routing_key]
+      mandatory =   opts[:mandatory]  || false
+      immediate =   opts[:immediate]  || false
+      persistent =  opts[:persistent] || false
+      properties =  opts[:properties]
+      _type = opts[:type]
+
+      if !properties
+        properties = case _type
+        when 'minimal'
+          if persistent
+            RabbitMQClient::MessageProperties::MINIMAL_PERSISTENT_BASIC
+          else
+            RabbitMQClient::MessageProperties::MINIMAL_BASIC
+          end
+        when 'basic'
+          if persistent
+            RabbitMQClient::MessageProperties::PERSISTENT_BASIC
+          else
+            RabbitMQClient::MessageProperties::BASIC
+          end
+        else
+          if persistent
+            RabbitMQClient::MessageProperties::PERSISTENT_TEXT_PLAIN
+          else
+            RabbitMQClient::MessageProperties::TEXT_PLAIN
+          end
+        end
+      end
+
+      returns  = opts[:listen_for_returns]
+      confirms = opts[:listen_for_confirms]
+      time_out = opts[:time_out] || 0.01
+
+      internal_publish msg, routing_key, properties, mandatory, immediate
+
+      feedback_queue = SizedQueue.new(1) if returns || acks
+      if returns || confirms
+        feedback_queue = SizedQueue.new(1)
+        @channel.return_listener = ReturnedMessageListener.new(lambda {|reply| feedback_queue << reply}) if returns
+        @channel.confirm_listener = ConfirmedMessageListener.new(lambda {|reply| feedback_queue << reply}) if confirms
+      end
+
+      internal_publish msg, routing_key, properties, mandatory, immediate
+
+      if returns || confirms
+        Thread.new(time_out) do |n|
+          sleep n
+          feedback_queue << {:kind => "TIME_OUT"}
+        end
+        feedback_queue.pop
+        @channel.return_listener = nil if returns
+        @channel.confirm_listener = nil if confirms
+      end
+    end
+
+    private
     # Set props for different type of message. Currently they are:
     # RabbitMQClient::MessageProperties::MINIMAL_BASIC
     # RabbitMQClient::MessageProperties::MINIMAL_PERSISTENT_BASIC
@@ -234,8 +319,9 @@ class RabbitMQClient
     # RabbitMQClient::MessageProperties::PERSISTENT_BASIC
     # RabbitMQClient::MessageProperties::TEXT_PLAIN
     # RabbitMQClient::MessageProperties::PERSISTENT_TEXT_PLAIN
-    def publish(message_body, routing_key='', props=RabbitMQClient::MessageProperties::TEXT_PLAIN, mandatory=false, immediate=false)
+    def internal_publish(message_body, routing_key='', props=nil, mandatory=false, immediate=false)
       raise RabbitMQClientError, "message cannot be converted to java bytes for publishing" unless message_body.respond_to?(:to_java_bytes)
+      raise RabbitMQClientError, "properties cannot be nil" if props.nil?
       if props.kind_of? Hash
         properties = Java::ComRabbitmqClient::AMQP::BasicProperties.new()
         props.each {|k,v| properties.send(:"#{k.to_s}=", v) }
@@ -243,17 +329,8 @@ class RabbitMQClient
         properties = props
       end
       @channel.basic_publish(@name, routing_key, mandatory, immediate, properties, message_body.to_java_bytes)
-      message_body
     end
 
-    def persistent_publish(message_body, routing_key='', props=MessageProperties::PERSISTENT_TEXT_PLAIN, mandatory=false, immediate=false)
-      raise RabbitMQClientError, "can only publish persistent message to durable queue" unless @durable
-      publish(message_body, routing_key, props, mandatory, immediate)
-    end
-
-    def delete
-      @channel.exchange_delete(@name)
-    end
   end
 
   # Class Methods
@@ -270,8 +347,8 @@ class RabbitMQClient
     @port = options[:port] || 5672
 
     # login details
-    @username = options[:user] || options[:username] || 'guest'
-    @password = options[:pass] || options[:password] || 'guest'
+    @username = options[:user] || 'guest'
+    @password = options[:pass] || 'guest'
     @vhost = options[:vhost] || '/'
 
     # queues and exchanges
@@ -303,16 +380,6 @@ class RabbitMQClient
     @connection = nil
   end
 
-  def register_callback(kind,&block)
-    if kind == :return
-      @channel.return_listener = ReturnedMessageListener.new(block)
-    end
-    if kind == :ack
-      @channel.confirm_listener = ConfirmedMessageListener.new(block)
-    end
-    self
-  end
-
   def connected?
     @connection != nil
   end
@@ -321,7 +388,7 @@ class RabbitMQClient
     @queues[name]
   end
 
-  def queue(name, opts)
+  def queue name, opts
     @queues[name] = Queue.new(name, @channel, opts)
   end
 
@@ -329,8 +396,18 @@ class RabbitMQClient
     @exchanges[name]
   end
 
-  def exchange(name, type='fanout', opts)
-    @exchanges[name] = Exchange.new(name, type, @channel, opts)
+  def exchange name, kind='fanout', opts={}
+    @exchanges[name] = Exchange.new(name, kind, @channel, opts)
+  end
+
+  def self.delete_queue name
+    @channel.queue_delete name
+    @queues.delete name
+  end
+
+  def self.delete_exchange name
+    @channel.exchange_delete name
+    @exchanges.delete name
   end
 end
 
