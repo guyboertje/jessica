@@ -255,35 +255,35 @@ class RabbitMQClient
 #
 # @option options [String] :content_type (application/octet-stream) Content-type of message payload.
     def publish(msg, opts)
-      routing_key = opts[:routing_key]
+      routing_key = opts[:routing_key] || opts[:key]
       mandatory =   opts[:mandatory]  || false
       immediate =   opts[:immediate]  || false
       persistent =  opts[:persistent] || false
-      properties =  opts[:properties]
-      _type = opts[:type]
+      headers =     opts[:headers]
+      _type =       opts[:type] || 'basic'
 
-      if !properties
-        properties = case _type
-        when 'minimal'
-          if persistent
-            RabbitMQClient::MessageProperties::MINIMAL_PERSISTENT_BASIC
-          else
-            RabbitMQClient::MessageProperties::MINIMAL_BASIC
-          end
-        when 'basic'
-          if persistent
-            RabbitMQClient::MessageProperties::PERSISTENT_BASIC
-          else
-            RabbitMQClient::MessageProperties::BASIC
-          end
+      properties = case _type
+      when 'minimal'
+        if persistent
+          RabbitMQClient::MessageProperties::MINIMAL_PERSISTENT_BASIC
         else
-          if persistent
-            RabbitMQClient::MessageProperties::PERSISTENT_TEXT_PLAIN
-          else
-            RabbitMQClient::MessageProperties::TEXT_PLAIN
-          end
+          RabbitMQClient::MessageProperties::MINIMAL_BASIC
+        end
+      when 'basic'
+        if persistent
+          RabbitMQClient::MessageProperties::PERSISTENT_BASIC
+        else
+          RabbitMQClient::MessageProperties::BASIC
+        end
+      else
+        if persistent
+          RabbitMQClient::MessageProperties::PERSISTENT_TEXT_PLAIN
+        else
+          RabbitMQClient::MessageProperties::TEXT_PLAIN
         end
       end
+
+      properties.headers = headers if headers
 
       returns, confirms = opts.values_at(:listen_for_returns,:listen_for_confirms)
       time_out = opts[:time_out] || 0.01
