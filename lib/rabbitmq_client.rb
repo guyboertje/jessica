@@ -80,12 +80,11 @@ class RabbitMQClient
 
     def initialize(name, channel, opts={})
       @name = name
-      @durable,auto_delete,@args = opts.values_at(:durable,:auto_delete,:args)
+      @durable,@auto_delete,@args = opts.values_at(:durable,:auto_delete,:args)
       @channel = channel
       exclusive = false
-      @auto_delete = auto_delete || false
       @bindings = {}
-      @channel.queue_declare(name, @durable, exclusive, @auto_delete, @args)
+      @channel.queue_declare(name, @durable, exclusive, @auto_delete || false, @args)
       self
     end
 
@@ -213,10 +212,9 @@ class RabbitMQClient
       @type = type
       @channel = channel
 
-      @durable, auto_delete,@args = opts.values_at(:durable,:auto_delete,:args)
-      @auto_delete = auto_delete || false
+      @durable, @auto_delete,@args = opts.values_at(:durable,:auto_delete,:args)
       # Declare a non-passive, auto-delete exchange
-      @channel.exchange_declare(@name, type.to_s, durable, @auto_delete, @args)
+      @channel.exchange_declare(@name, type.to_s, durable, @auto_delete || false, @args)
       self
     end
 
