@@ -404,5 +404,9 @@ class RabbitMQClient
     @channel.exchange_delete name
     @exchanges.delete name
   end
+
+  def qos(prefetch_size = 0, prefetch_count = 32, global = false)
+    @channel.basic_qos(prefetch_size, prefetch_count, global)
+  end
 end
 

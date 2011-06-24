@@ -76,6 +76,10 @@ module AMQP
       @connection.disconnect
     end
 
+    def prefetch(count, global = false)
+      @connection.channel.basic_qos(0, count, global)
+    end
+
     def direct(name = 'amq.direct', opts = {}, &block)
       if exchange = @connection.find_exchange(name)
         raise AMQP::IncompatibleOptionsError.new() unless exchange.match_opts(opts)
