@@ -96,14 +96,20 @@ class RabbitMQClient
     #@queue.bind @exchange, :routing_key => 'messages.#'
     def bind(exchange, opts)
       key = opts[:routing_key]
-      @bindings[exchange] = opts
+      @bindings[key] = exchange.name
       @channel.queue_bind(@name, exchange.name, key)
       self
     end
 
-    def unbind(exchange, opts)
-      key = opts[:routing_key]
-      @channel.queue_unbind(@name, exchange.name, key)
+    def unbind(exchange=nil, opts={})
+      if exchange && opts.size > 0
+        key = opts[:routing_key]
+        @channel.queue_unbind(@name, exchange.name, key)
+      else
+        @bindings.each do |key, exch|
+          @channel.queue_unbind(@name, exch, key)
+        end
+      end
     end
 
     def retrieve(opts={})
@@ -330,21 +336,29 @@ class RabbitMQClient
 
   # Class Methods
   class << self
+    def factory(options)
+      conn_factory = ConnectionFactory.new
+      conn_factory.username = options[:user] || 'guest'
+      conn_factory.password = options[:pass] || 'guest'
+      conn_factory.virtual_host = options[:vhost] || '/'
+      conn_factory.requested_heartbeat = options[:requested_heartbeat] || 0
+      conn_factory.host = options[:host] || '127.0.0.1'
+      conn_factory.port = options[:port] || 5672
+      conn_factory
+    end
   end
 
   attr_reader :channel
   attr_reader :connection
+  attr_accessor :factory
 
   # Instance Methods
   def initialize(options={})
-    # server address
-    @host = options[:host] || '127.0.0.1'
-    @port = options[:port] || 5672
-
-    # login details
-    @username = options[:user] || 'guest'
-    @password = options[:pass] || 'guest'
-    @vhost = options[:vhost] || '/'
+    if options[:factory]
+      @factory = options[:factory]
+    else
+      @factory = self.class.factory(options)
+    end
 
     # queues and exchanges
     @queues = {}
@@ -356,15 +370,8 @@ class RabbitMQClient
     self
   end
 
-  def connect
-    conn_factory = ConnectionFactory.new
-    conn_factory.username = @username
-    conn_factory.password = @password
-    conn_factory.virtual_host = @vhost
-    conn_factory.requested_heartbeat = 0
-    conn_factory.host = @host
-    conn_factory.port = @port
-    @connection = conn_factory.new_connection
+  def connect()
+    @connection = @factory.new_connection
     @channel = @connection.create_channel
   end
 
