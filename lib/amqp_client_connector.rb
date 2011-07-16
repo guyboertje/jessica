@@ -4,25 +4,28 @@ require 'rabbitmq_client'
 module AMQP
   IncompatibleOptionsError = Class.new(StandardError)
   ClientConnectorError = Class.new(StandardError)
+
   def self.settings
     @settings ||= AMQP::Client::Settings.default
   end
+
+  def factory(factory=nil)
+    factory ? @factory = factory : @factory
+  end
+
   module Client
     module Settings
       def self.default
         @default ||= {
-          # server
           :host  => "127.0.0.1", :port  => 5672,
-          # login
           :user  => "guest", :pass  => "guest", :vhost => "/",
           # connection timeout
           :timeout => nil,
-          # logging
           :logging => false,
-          # ssl
           :ssl => false
         }
       end
+
       def self.configure(settings = nil)
         case settings
         when Hash then
@@ -39,21 +42,17 @@ module AMQP
       end
     end
   end
+
   class Connection
     def self.new(options=nil)
       @options = AMQP::Client::Settings.configure(options || AMQP.settings)
-      RabbitMQClient.new(@options)
+      factory = options ? RabbitMQClient.factory(@options) : AMQP.factory() || AMQP.factory(RabbitMQClient.factory(@options))
+      RabbitMQClient.new(:factory => factory)
     end
   end
+
   class Channel
     attr_reader :connection,:options
-    ##
-    #@host = options[:host] || '127.0.0.1'
-    #@port = options[:port] || 5672
-    #@username = options[:username] || 'guest'
-    #@password = options[:password] || 'guest'
-    #@vhost = options[:vhost] || '/'
-
     def initialize(connection=nil,channel_id=1,opts={})
       @options = opts
       @connection = connection || AMQP::Connection.new(@options)
