@@ -197,8 +197,8 @@ class RabbitMQClient
       @properties = delivery.properties
       @reacted = false
     end
-    def ack!
-      @channel.basic_ack(@envelope.delivery_tag, false)
+    def ack!(multiple=false)
+      @channel.basic_ack(@envelope.delivery_tag, multiple)
       @reacted = true
     end
     def reject!(requeue = true)
