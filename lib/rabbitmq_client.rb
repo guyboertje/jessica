@@ -402,12 +402,12 @@ class RabbitMQClient
     @exchanges[name] = Exchange.new(name, kind, @channel, opts)
   end
 
-  def self.delete_queue name
+  def delete_queue name
     @channel.queue_delete name
     @queues.delete name
   end
 
-  def self.delete_exchange name
+  def delete_exchange name
     @channel.exchange_delete name
     @exchanges.delete name
   end
