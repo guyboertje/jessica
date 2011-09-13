@@ -376,7 +376,6 @@ class RabbitMQClient
   end
 
   def disconnect
-    @queues.values.each { |q| q.unbind }
     @channel.close
     @connection.close
     @connection = nil
