@@ -4,7 +4,6 @@ require 'rabbitmq_client'
 require 'rspec'
 require 'timeout'
 
-
 class BrokenMarshaller
   def self.dump(message)
     message
