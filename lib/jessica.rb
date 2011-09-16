@@ -1,2 +1,2 @@
 require 'require_all'
-require_rel 'jessica'
+require_rel 'jessica/*.rb'
