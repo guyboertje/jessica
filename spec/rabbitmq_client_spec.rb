@@ -30,8 +30,8 @@ describe RabbitMQClient do
 
   describe Queue, "Basic non-persistent queue with default marshaller" do
     before(:each) do
-      @queue = @client.queue('test_queue',false, :default)
-      @exchange = @client.exchange('test_exchange', 'direct',false, :default)
+      @queue = @client.queue('test_queue', :durable => false, :auto_delete => false)
+      @exchange = @client.exchange('test_exchange', 'direct', :durable => false, :default => true)
     end
 
     after(:each) do
@@ -183,8 +183,8 @@ describe RabbitMQClient do
     end
 
     it "should raise an exception if binding a persistent queue with a non-persistent exchange and vice versa" do
-      persistent_queue = @client.queue('test_queue1', true)
-      persistent_exchange = @client.exchange('test_exchange1', 'fanout', true)
+      persistent_queue = @client.queue('test_queue1', :durable => true)
+      persistent_exchange = @client.exchange('test_exchange1', 'fanout', :durable => true)
       lambda { persistent_queue.bind(@exchange) }.should raise_error(RabbitMQClient::RabbitMQClientError)
       lambda { @queue.bind(persistent_exchange) }.should raise_error(RabbitMQClient::RabbitMQClientError)
       persistent_queue.delete
@@ -245,8 +245,8 @@ describe RabbitMQClient do
 
   describe Queue, "Basic persistent queue" do
     before(:each) do
-      @queue = @client.queue('test_durable_queue', true)
-      @exchange = @client.exchange('test_durable_exchange', 'fanout', true)
+      @queue = @client.queue('test_durable_queue', :durable => true)
+      @exchange = @client.exchange('test_durable_exchange', 'fanout', :durable => true)
     end
 
     after(:each) do
@@ -309,7 +309,7 @@ describe RabbitMQClient do
 
   describe Queue, "Basic, non-marshalled queue" do
     before(:each) do
-      @queue = @client.queue('test_queue', false, false)
+      @queue = @client.queue('test_queue', :durable => false, :auto_delete => false)
       @exchange = @client.exchange('test_exchange', 'direct')
     end
 
@@ -368,8 +368,8 @@ describe RabbitMQClient do
 
   describe Queue, "Basic, client-defined marshalling queue" do
     before(:each) do
-      @queue = @client.queue('test_queue', false, MyMarshaller)
-      @exchange = @client.exchange('test_exchange', 'direct', false, MyMarshaller)
+      @queue = @client.queue('test_queue', :durable => false)
+      @exchange = @client.exchange('test_exchange', 'direct', :durable => false)
     end
 
     after(:each) do
@@ -427,8 +427,8 @@ describe RabbitMQClient do
 
   describe Queue, "Basic persistent queue with mandatory and immediate flags and return message handling" do
     before(:each) do
-      @queue = @client.queue('test_durable_queue', true)
-      @exchange = @client.exchange('test_direct_durable_exchange', 'direct', true)
+      @queue = @client.queue('test_durable_queue', :durable => true)
+      @exchange = @client.exchange('test_direct_durable_exchange', 'direct', :durable => true)
       @publish_return = @publish_ack = nil
       @start = @stop = 0
       @client.register_callback(:return) {|ret| @publish_return = ret} #; @stop = java.lang.System.nano_time}
