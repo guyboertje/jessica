@@ -1,5 +1,4 @@
 #attempt to create an api that is compatible with the amqp gem
-require 'rabbitmq_client'
 
 module AMQP
   IncompatibleOptionsError = Class.new(StandardError)

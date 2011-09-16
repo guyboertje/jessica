@@ -1,35 +1,10 @@
+# encoding: utf-8
 $LOAD_PATH.unshift(File.dirname(__FILE__))
 
-require 'rabbitmq_client'
+require 'ap'
+require 'jessica'
 require 'rspec'
 require 'timeout'
-
-class BrokenMarshaller
-  def self.dump(message)
-    message
-  end
-end
-class MyMarshaller
-  def self.load(body)
-    body
-  end
-  def self.dump(message)
-    message
-  end
-end
-
-describe RabbitMQClient do
-
-  it "should raise an exception for a broken marshaller" do
-    lambda { @client = RabbitMQClient.new({:no_auto_connect=>true, :marshaller=>BrokenMarshaller}) }.should raise_error(RabbitMQClient::RabbitMQClientError)
-  end
-
-  it "should allow no marshaller" do
-    lambda { @client = RabbitMQClient.new({:no_auto_connect=>true, :marshaller=>false}) }.should_not raise_error(RabbitMQClient::RabbitMQClientError)
-  end
-
-end
-
 
 describe RabbitMQClient do
   before(:each) do
@@ -51,18 +26,6 @@ describe RabbitMQClient do
   it "should be able to create a new exchange" do
     exchange = @client.exchange('test_exchange', 'direct')
     exchange.should_not be_nil
-  end
-
-  it "should raise an exception creating a queue with a broken marshaller" do
-    lambda { @client.queue('test_queue', false, BrokenMarshaller) }.should raise_error(RabbitMQClient::RabbitMQClientError)
-  end
-
-  it "should raise an exception setting a broken marshaller using the accessor" do
-    lambda { @client.marshaller = BrokenMarshaller }.should raise_error(RabbitMQClient::RabbitMQClientError)
-  end
-
-  it "should be able to set a marshaller using the accessor" do
-    lambda { @client.marshaller = MyMarshaller }.should_not raise_error(RabbitMQClient::RabbitMQClientError)
   end
 
   describe Queue, "Basic non-persistent queue with default marshaller" do

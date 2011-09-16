@@ -1,10 +1,10 @@
 Gem::Specification.new do |s|
   s.name        = 'jessica'
-  s.version     = '1.0.0'
+  s.version     = '1.0.1'
   s.platform    = RUBY_PLATFORM.to_s == 'java' ? 'java' : Gem::Platform::RUBY
   s.authors     = ['Guy Boertje','Jerry Luk']
   s.email       = 'guyboertje@gmail.com'
-  s.date        = '2011-09-15'
+  s.date        = '2011-09-16'
   s.summary     = 'A RabbitMQ client for JRuby'
   s.description = s.summary + 'with some AMQP gem api compatibility'
   s.homepage    = 'http://github.com/guyboertje/jessica'
