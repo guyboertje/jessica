@@ -21,7 +21,6 @@ Gem::Specification.new do |s|
     lib/jessica/LICENSE-GPL2
     lib/jessica/LICENSE-MPL-RabbitMQ
     lib/jessica/amqp_client_connector.rb
-    lib/jessica/commons-cli-1.1.jar
     lib/jessica/commons-io-1.2.jar
     lib/jessica/rabbitmq-client-tests.jar
     lib/jessica/rabbitmq-client.jar
