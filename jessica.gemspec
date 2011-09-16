@@ -6,7 +6,7 @@ Gem::Specification.new do |s|
   s.email       = 'guyboertje@gmail.com'
   s.date        = '2011-09-16'
   s.summary     = 'A RabbitMQ client for JRuby'
-  s.description = s.summary + 'with some AMQP gem api compatibility'
+  s.description = s.summary + ' with some AMQP gem api compatibility'
   s.homepage    = 'http://github.com/guyboertje/jessica'
 
   # = MANIFEST =
