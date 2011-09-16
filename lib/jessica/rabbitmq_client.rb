@@ -1,6 +1,6 @@
 require 'java'
-require File.dirname(__FILE__) + '/commons-io-1.4.jar'
-require File.dirname(__FILE__) + '/rabbitmq-client.jar'
+require_rel 'jars/commons-io-1.4.jar'
+require_rel 'jars/rabbitmq-client.jar'
 
 class RabbitMQClient
   include ObjectSpace

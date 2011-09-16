@@ -1,7 +1,7 @@
 Gem::Specification.new do |s|
   s.name        = 'jessica'
-  s.version     = '1.0.1'
-  s.platform    = RUBY_PLATFORM.to_s == 'java' ? 'java' : Gem::Platform::RUBY
+  s.version     = '1.0.2'
+  s.platform    = 'java'
   s.authors     = ['Guy Boertje','Jerry Luk']
   s.email       = 'guyboertje@gmail.com'
   s.date        = '2011-09-16'
@@ -21,9 +21,9 @@ Gem::Specification.new do |s|
     lib/jessica/LICENSE-GPL2
     lib/jessica/LICENSE-MPL-RabbitMQ
     lib/jessica/amqp_client_connector.rb
-    lib/jessica/commons-io-1.2.jar
-    lib/jessica/rabbitmq-client-tests.jar
-    lib/jessica/rabbitmq-client.jar
+    lib/jessica/jars/commons-io-1.4.jar
+    lib/jessica/jars/rabbitmq-client-tests.jar
+    lib/jessica/jars/rabbitmq-client.jar
     lib/jessica/rabbitmq_client.rb
     lib/jessica/version.rb
     spec/rabbitmq_client_spec.rb
